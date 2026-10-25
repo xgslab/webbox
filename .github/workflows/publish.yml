@@ -44,7 +44,7 @@ jobs:
               const ext = '.png'; 
               const filename = `issue-${process.env.ISSUE_NUMBER}-${Date.now()}-${downloads.length}${ext}`;
               const dest = path.join('static', 'images', filename);
-              const webPath = `/images/${filename}`;
+              const webPath = `images/${filename}`;
 
               downloads.push(new Promise((resolve) => {
                   const file = fs.createWriteStream(dest);
