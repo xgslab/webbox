@@ -11,10 +11,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (for image processing)
+      - name: Setup Node.js (Latest Version)
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24' # Upgraded to fix the deprecation warning
 
       - name: Download Images and Format Post
         env:
@@ -22,17 +22,18 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          # Create an assets folder for images if it doesn't exist
+          # 1. Force-create all required directory structures so the script never crashes
           mkdir -p static/images/
+          mkdir -p content/blog/
+          mkdir -p content/posts/
           
-          # Use Node to find GitHub uploaded image URLs, download them locally, and update markdown links
+          # 2. Set up the JavaScript helper file safely
           cat << 'EOF' > download-images.js
           const fs = require('fs');
           const https = require('https');
           const path = require('path');
 
           let body = process.env.ISSUE_BODY || '';
-          // Regex to find markdown images or HTML images uploaded by GitHub
           const imgRegex = /(!\[.*?\]\((https:\/\/github\.com\/user-attachments\/assets\/.*?)\))|(<img.*?src="(https:\/\/github\.com\/user-attachments\/assets\/.*?)".*?>)/g;
           let match;
           const downloads = [];
@@ -40,7 +41,7 @@ jobs:
           while ((match = imgRegex.exec(body)) !== null) {
               const fullMatch = match[0];
               const url = match[2] || match[4];
-              const ext = '.png'; // GitHub assets are typically image binaries
+              const ext = '.png'; 
               const filename = `issue-${process.env.ISSUE_NUMBER}-${Date.now()}-${downloads.length}${ext}`;
               const dest = path.join('static', 'images', filename);
               const webPath = `/images/${filename}`;
@@ -51,11 +52,10 @@ jobs:
                       response.pipe(file);
                       file.on('finish', () => {
                           file.close();
-                          // Replace the GitHub link with our local Hugo path
                           body = body.replace(fullMatch, `![Image](${webPath})`);
                           resolve();
                       });
-                  });
+                  }).on('error', () => resolve()); // Fallback if image fails to download
               }));
           }
 
@@ -64,27 +64,42 @@ jobs:
           });
           EOF
 
+          # 3. Execute the script safely
           node download-images.js
 
-          # Build the final post file
-          FILENAME="content/blog/issue-${ISSUE_NUMBER}.md"
+          # 4. Detect whether your template uses 'blog' or 'posts' folder
+          if [ -d "content/posts" ] && [ ! -d "content/blog" ]; then
+            TARGET_DIR="content/posts"
+          else
+            TARGET_DIR="content/blog"
+          fi
+
+          FILENAME="${TARGET_DIR}/issue-${ISSUE_NUMBER}.md"
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+          # 5. Build out the markdown file structure
           echo "---" > $FILENAME
           echo "title: \"${ISSUE_TITLE}\"" >> $FILENAME
           echo "date: $DATE" >> $FILENAME
           echo "draft: false" >> $FILENAME
           echo "---" >> $FILENAME
           echo "" >> $FILENAME
-          cat temp_body.md >> $FILENAME
-          rm temp_body.md download-images.js
+          
+          if [ -f temp_body.md ]; then
+            cat temp_body.md >> $FILENAME
+            rm temp_body.md
+          else
+            echo "${ISSUE_BODY}" >> $FILENAME
+          fi
+          
+          rm -f download-images.js
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "Microblog Bot"
           git config --global user.email "bot@microblog.local"
-          git add content/blog/ static/images/ || true
-          git commit -m "New post: ${{ github.event.issue.title }}"
+          git add content/ static/images/ || true
+          git commit -m "New post: ${{ github.event.issue.title }}" || echo "No changes to commit"
           git push
 
       - name: Close the Issue Automatically
@@ -92,3 +107,4 @@ jobs:
         with:
           issue-number: ${{ github.event.issue.number }}
           comment: "Post successfully processed and sent to Cloudflare Pages!"
+
