@@ -1,0 +1,78 @@
+/* Apply the pitch-black background and clean system fonts */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-size: 1.1rem;
+    line-height: 1.6;
+    background-color: #000000; /* Pure dark theme background */
+    color: #e5e5e7;            /* Soft off-white text to prevent eye strain */
+    max-width: 680px;          /* Comfortable reading width */
+    margin: 40px auto;
+    padding: 0 24px;
+}
+
+/* Headers are crisp, bright white */
+h1, h2, h3, h4 {
+    color: #ffffff;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-top: 1.8em;
+    margin-bottom: 0.5em;
+}
+
+/* Post Titles specifically */
+h2 a {
+    color: #ffffff !important;
+    text-decoration: none;
+}
+
+/* Clean, modern text links that mimic Josh's design */
+a {
+    color: #e5e5e7;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-thickness: 1px;
+}
+
+a:hover {
+    color: #ffffff;
+    text-decoration-thickness: 2px;
+}
+
+/* Muted gray for dates and metadata */
+time, .post-date, .meta, .date {
+    display: block;
+    font-size: 0.9rem;
+    color: #8e8e93; /* Smooth gray for secondary information */
+    margin-top: -0.5em;
+    margin-bottom: 1.5em;
+}
+
+/* Standard navigation/list adjustments */
+ul, ol {
+    padding-left: 20px;
+    margin-bottom: 1.5em;
+}
+
+li {
+    margin-bottom: 0.5em;
+}
+
+/* Image adjustments for dark background viewing */
+img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px; /* Slightly rounded edges for photos */
+    margin: 2em 0;
+    opacity: 0.95;     /* Slightly dial down raw image brightness in dark mode */
+}
+
+/* Clean styling for terminal/code snippets */
+code, pre {
+    background-color: #1c1c1e; /* Deep charcoal container for code */
+    color: #ff453a;            /* Pop of color for inline code text */
+    font-family: ui-monospace, SFMono-Regular, "SF Pro Text", Menlo, Monaco, Consolas, monospace;
+    font-size: 0.9em;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
