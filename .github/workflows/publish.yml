@@ -85,11 +85,11 @@ jobs:
           node process.js
 
           # Figure out theme directory destination
-          if [ -d "content/posts" ]; then
-            TARGET_DIR="content/posts"
-          else
+          #if [ -d "content/posts" ]; then
+           # TARGET_DIR="content/posts"
+          #else
             TARGET_DIR="content/blog"
-          fi
+          #fi
 
           FILENAME="${TARGET_DIR}/issue-${ISSUE_NUMBER}.md"
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
