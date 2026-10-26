@@ -11,7 +11,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (Latest Version)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -21,82 +21,71 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Passes the permission token to access the image link
         run: |
+          # Create missing folders
           mkdir -p static/images/
           mkdir -p content/blog/
           mkdir -p content/posts/
           
-          cat << 'EOF' > download-images.js
+          # Write processing script
+          cat << 'EOF' > process.js
           const fs = require('fs');
           const https = require('https');
           const path = require('path');
-          const { URL } = require('url');
 
           let body = process.env.ISSUE_BODY || '';
-          const imgRegex = /(!\[.*?\]\((https:\/\/github\.com\/user-attachments\/assets\/.*?)\))|(<img.*?src="(https:\/\/github\.com\/user-attachments\/assets\/.*?)".*?>)/g;
+          // Catches both regular markdown images and html tags from github uploads
+          const regex = /(!\[.*?\]\((https:\/\/github\.com\/user-attachments\/assets\/.*?)\))|(<img.*?src="(https:\/\/github\.com\/user-attachments\/assets\/.*?)".*?>)/g;
+          
           let match;
-          const downloads = [];
+          const matches = [];
+          while ((match = regex.exec(body)) !== null) {
+              matches.push({
+                  full: match[0],
+                  url: match[2] || match[4]
+              });
+          }
 
-          // Helper function that follows redirects to download raw binary image data
-          function downloadFile(fileUrl, destPath, token) {
+          function download(url, dest) {
               return new Promise((resolve) => {
-                  const options = new URL(fileUrl);
-                  options.headers = {
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-                      'Authorization': `Bearer ${token}`
-                  };
-
-                  https.get(options, (response) => {
-                      // If GitHub sends a redirect (301/302), follow it to the real asset file
-                      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-                          downloadFile(response.headers.location, destPath, token).then(resolve);
-                          return;
-                      }
-
-                      if (response.statusCode === 200) {
-                          const file = fs.createWriteStream(destPath);
-                          response.pipe(file);
-                          file.on('finish', () => {
-                              file.close();
-                              resolve(true);
-                          });
+                  const file = fs.createWriteStream(dest);
+                  https.get(url, (res) => {
+                      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                          // Follow redirection seamlessly
+                          https.get(res.headers.location, (redirRes) => {
+                              redirRes.pipe(file);
+                              file.on('finish', () => { file.close(); resolve(true); });
+                          }).on('error', () => resolve(false));
                       } else {
-                          resolve(false); // Skip if there's a permanent error
+                          res.pipe(file);
+                          file.on('finish', () => { file.close(); resolve(true); });
                       }
                   }).on('error', () => resolve(false));
               });
           }
 
-          async function processImages() {
-              const matches = [];
-              while ((match = imgRegex.exec(body)) !== null) {
-                  matches.push({
-                      fullMatch: match[0],
-                      url: match[2] || match[4]
-                  });
-              }
-
+          async function run() {
               for (let i = 0; i < matches.length; i++) {
-                  const item = matches[i];
-                  const filename = `issue-${process.env.ISSUE_NUMBER}-${Date.now()}-${i}.png`;
+                  const filename = `img-${process.env.ISSUE_NUMBER}-${Date.now()}-${i}.png`;
                   const dest = path.join('static', 'images', filename);
-                  const webPath = `images/${filename}`;
-
-                  const success = await downloadFile(item.url, dest, process.env.GITHUB_TOKEN);
-                  if (success) {
-                      body = body.replace(item.fullMatch, `![Image](${webPath})`);
+                  const relativeWebPath = `/images/${filename}`;
+                  
+                  const ok = await download(matches[i].url, dest);
+                  if (ok) {
+                      // Swap the cloud link out for our newly saved local folder path
+                      body = body.replace(matches[i].full, `![Image](${relativeWebPath})`);
                   }
               }
               fs.writeFileSync('temp_body.md', body);
           }
 
-          processImages();
+          run();
           EOF
 
-          node download-images.js
+          node process.js
 
-          if [ -d "content/posts" ] && [ ! -d "content/blog" ]; then
+          # Figure out theme directory destination
+          if [ -d "content/posts" ]; then
             TARGET_DIR="content/posts"
           else
             TARGET_DIR="content/blog"
@@ -118,19 +107,18 @@ jobs:
           else
             echo "${ISSUE_BODY}" >> $FILENAME
           fi
-          
-          rm -f download-images.js
+          rm -f process.js
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "Microblog Bot"
           git config --global user.email "bot@microblog.local"
-          git add content/ static/images/ || true
-          git commit -m "New post: ${{ github.event.issue.title }}" || echo "No changes to commit"
+          git add static/images/ content/ || true
+          git commit -m "Add post from issue #${{ github.event.issue.number }}" || echo "No changes"
           git push
 
       - name: Close the Issue Automatically
         uses: peter-evans/close-issue@v3
         with:
           issue-number: ${{ github.event.issue.number }}
-          comment: "Post successfully processed and images downloaded natively!"
+          comment: "Images downloaded natively and site deployed!"
